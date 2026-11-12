@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>End-to-End LLM Explainer — Tokenization to WebGPU Generation</title>
+    <meta
+      name="description"
+      content="Interactive end-to-end Large Language Model explainer unifying Tokenization, Embeddings, Attention, Sampling, and real client-side WebGPU/WASM LLM inference."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
+      crossorigin="anonymous"
+    />
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+      crossorigin="anonymous"
+    ></script>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <div class="brand-lockup">
+          <div class="brand-badge">LLM</div>
+          <div>
+            <h2 class="brand-title">End-to-End LLM Explainer</h2>
+            <p class="brand-sub">
+              Unifying Tokenization → Embeddings → Transformer Blocks → Sampling &amp; Live WebGPU
+            </p>
+          </div>
+        </div>
+        <nav class="series-pills" aria-label="LLM Mechanistic Companion Series">
+          <a
+            class="series-pill"
+            href="https://martianunlimited.github.io/llm_tokenizer/"
+            target="_blank"
+            rel="noopener"
+            >#1 Tokenization ↗</a
+          >
+          <a
+            class="series-pill"
+            href="https://martianunlimited.github.io/llm_embedding/"
+            target="_blank"
+            rel="noopener"
+            >#2 Embeddings ↗</a
+          >
+          <a
+            class="series-pill"
+            href="https://martianunlimited.github.io/llm_positional/"
+            target="_blank"
+            rel="noopener"
+            >#3 Positional ↗</a
+          >
+          <a
+            class="series-pill"
+            href="https://martianunlimited.github.io/llm_attention/"
+            target="_blank"
+            rel="noopener"
+            >#4 Attention ↗</a
+          >
+          <a
+            class="series-pill"
+            href="https://martianunlimited.github.io/llm_sampling/"
+            target="_blank"
+            rel="noopener"
+            >#5 Sampling ↗</a
+          >
+          <a
+            class="series-pill"
+            href="https://martianunlimited.github.io/llm_kvcache/"
+            target="_blank"
+            rel="noopener"
+            >#6 KV-Cache ↗</a
+          >
+          <span class="series-pill active">#7 End-to-End</span>
+        </nav>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      <section class="hero-banner">
+        <div class="hero-copy">
+          <h1>Inside a Transformer Forward Pass</h1>
+          <p>
+            Follow raw text through BPE subword encoding, 768-D token + position geometry, 12 causal
+            attention &amp; GELU MLP blocks, Logit Lens emergence, and probabilistic decoding — backed
+            by <strong>genuine PyTorch <code>openai-community/gpt2</code> tensors</strong> or your
+            own prompt running <strong>live on WebGPU / WASM</strong>.
+          </p>
+        </div>
+        <div class="mode-tabs" role="tablist" aria-label="Execution Mode">
+          <button
+            id="tab-explainer"
+            class="mode-tab active"
+            role="tab"
+            aria-selected="true"
+            type="button"
+          >
+            <span>End-to-End Transformer Trace</span>
+            <span class="badge-instant">0 MB Instant</span>
+          </button>
+          <button
+            id="tab-live"
+            class="mode-tab"
+            role="tab"
+            aria-selected="false"
+            type="button"
+          >
+            <span>Live Browser LLM</span>
+            <span class="badge-real">WebGPU / WASM</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- TAB 1: REAL PYTORCH GPT-2 TRACE EXPLORER -->
+      <section id="panel-explainer" class="tab-panel active" role="tabpanel">
+        <div class="glass-card">
+          <div class="card-header">
+            <div class="card-title-wrap">
+              <span class="stage-kicker">Select Companion Scenario (Real GPT-2 Forward Pass)</span>
+              <h2 class="card-title">Cross-Lab Diagnostic Prompts</h2>
+              <p class="card-desc">
+                Each prompt reproduces a signature phenomenon from the companion series using full
+                12-layer &times; 12-head PyTorch activations.
+              </p>
+            </div>
+            <a id="explainer-companion-link" class="companion-btn" href="#" target="_blank" rel="noopener">
+              Open Companion Lab ↗
+            </a>
+          </div>
+
+          <div id="preset-grid" class="preset-grid"></div>
+          <div id="preset-note" class="callout-banner"></div>
+        </div>
+
+        <!-- 4-Stage Pipeline Navigator -->
+        <nav class="pipeline-rail" aria-label="Transformer Architecture Stages">
+          <button class="pipe-node active" data-jump="stage-1" type="button">
+            <span class="pipe-step-num">STAGE 01</span>
+            <div class="pipe-title">BPE Tokenization</div>
+            <div id="shape-stage-1" class="pipe-shape">text → ids [T]</div>
+          </button>
+          <button class="pipe-node" data-jump="stage-2" type="button">
+            <span class="pipe-step-num">STAGE 02</span>
+            <div class="pipe-title">WTE + WPE Geometry</div>
+            <div id="shape-stage-2" class="pipe-shape">h₀ = [T, 768]</div>
+          </button>
+          <button class="pipe-node" data-jump="stage-3" type="button">
+            <span class="pipe-step-num">STAGE 03</span>
+            <div class="pipe-title">12× Decoder Blocks</div>
+            <div id="shape-stage-3" class="pipe-shape">Attn + MLP [12×12]</div>
+          </button>
+          <button class="pipe-node" data-jump="stage-4" type="button">
+            <span class="pipe-step-num">STAGE 04</span>
+            <div class="pipe-title">LM Head &amp; Sampling</div>
+            <div id="shape-stage-4" class="pipe-shape">logits [50,257] → next</div>
+          </button>
+        </nav>
+
+        <!-- STAGE 1: TOKENIZATION & AUTOREGRESSIVE STEPPING -->
+        <section id="stage-1" class="glass-card">
+          <div class="card-header">
+            <div class="card-title-wrap">
+              <span class="stage-kicker">Stage 1 · Text → Discrete Subword IDs</span>
+              <h3 class="card-title">BPE Token Ribbon &amp; Autoregressive Loop</h3>
+              <p class="card-desc">
+                Words split into subwords and leading spaces bind to words (<code class="mono">·France</code>).
+                Click any token to inspect its embedding vector below, or step forward autoregressively.
+              </p>
+            </div>
+            <a
+              class="companion-btn"
+              href="https://martianunlimited.github.io/llm_tokenizer/"
+              target="_blank"
+              rel="noopener"
+              >Deep Dive: LLM Tokenizer ↗</a
+            >
+          </div>
+
+          <div class="control-row">
+            <button id="btn-ar-step" class="btn-primary" type="button">
+              Append Greedy Next Token (+1 Step)
+            </button>
+            <button id="btn-ar-reset" class="btn-secondary" type="button">Reset Stepper</button>
+            <span id="ar-status" class="mono" style="color: var(--text-secondary); font-size: 0.82rem"></span>
+          </div>
+
+          <div id="token-ribbon" class="token-ribbon"></div>
+        </section>
+
+        <!-- STAGE 2: EMBEDDINGS + POSITIONAL GEOMETRY -->
+        <section id="stage-2" class="glass-card">
+          <div class="card-header">
+            <div class="card-title-wrap">
+              <span class="stage-kicker">Stage 2 · Input Representation \(h_0 = W_{te}[id] + W_{pe}[pos]\)</span>
+              <h3 class="card-title">Token Embeddings + Positional Encoding</h3>
+              <p class="card-desc">
+                GPT-2 looks up a static 768-D vector per token ID (<code class="mono">wte</code>) and
+                adds an absolute 768-D position vector (<code class="mono">wpe</code>). Inspect how
+                token-pair cosine similarities transform from raw input to contextual layer 11.
+              </p>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap">
+              <a
+                class="companion-btn"
+                href="https://martianunlimited.github.io/llm_embedding/"
+                target="_blank"
+                rel="noopener"
+                >LLM Embeddings ↗</a
+              >
+              <a
+                class="companion-btn"
+                href="https://martianunlimited.github.io/llm_positional/"
+                target="_blank"
+                rel="noopener"
+                >Positional Encoding ↗</a
+              >
+            </div>
+          </div>
+
+          <div class="split-grid">
+            <div class="sub-panel">
+              <h4>
+                <span id="emb-selected-label">Selected Token Vector Slice (Dims 0–31 of 768)</span>
+                <span id="emb-norms-badge" class="mono" style="font-size: 0.74rem; color: var(--accent-cyan)"></span>
+              </h4>
+              <div style="font-size: 0.78rem; color: var(--text-secondary)">
+                Static Token Embedding (<code class="mono">wte</code>)
+              </div>
+              <div id="vec-wte-strip" class="vector-strip"></div>
+              <div style="font-size: 0.78rem; color: var(--text-secondary)">
+                Positional Vector (<code class="mono">wpe[pos]</code>)
+              </div>
+              <div id="vec-wpe-strip" class="vector-strip"></div>
+              <div style="font-size: 0.78rem; color: var(--text-secondary)">
+                Combined Transformer Input (<code class="mono">h₀ = wte + wpe</code>)
+              </div>
+              <div id="vec-combined-strip" class="vector-strip"></div>
+            </div>
+
+            <div class="sub-panel">
+              <h4>
+                <span>Pairwise Cosine Similarity Geometry</span>
+                <span class="layer-scrubber" id="cosine-mode-btns">
+                  <button class="pill-selector active" data-cos="wte" type="button">Raw WTE</button>
+                  <button class="pill-selector" data-cos="combined" type="button">WTE + WPE</button>
+                  <button class="pill-selector" data-cos="final" type="button">Post Layer 11</button>
+                </span>
+              </h4>
+              <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0 0 8px">
+                Same token string at different positions has similarity 1.00 in Raw WTE, shifts
+                slightly with WPE, and diverges sharply after contextual attention in Layer 11.
+              </p>
+              <div id="cosine-matrix-wrap" class="matrix-scroll"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- STAGE 3: TRANSFORMER BLOCKS (ATTENTION + MLP + LOGIT LENS) -->
+        <section id="stage-3" class="glass-card">
+          <div class="card-header">
+            <div class="card-title-wrap">
+              <span class="stage-kicker">
+                Stage 3 · Residual Block \(x_{l+1} = x_l + \text{Attn}(\text{LN}_1(x_l)) + \text{MLP}(\text{LN}_2(x_l'))\)
+              </span>
+              <h3 class="card-title">Multi-Head Causal Attention, GELU MLP &amp; Logit Lens</h3>
+              <p class="card-desc">
+                Scrub across all 12 layers and 12 heads to watch information flow cleanly under the
+                causal mask, see MLP neurons fire, and watch next-token predictions crystallize via Logit Lens.
+              </p>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap">
+              <a
+                class="companion-btn"
+                href="https://martianunlimited.github.io/llm_attention/"
+                target="_blank"
+                rel="noopener"
+                >LLM Attention ↗</a
+              >
+              <a
+                class="companion-btn"
+                href="https://martianunlimited.github.io/llm_kvcache/"
+                target="_blank"
+                rel="noopener"
+                >KV-Cache ↗</a
+              >
+            </div>
+          </div>
+
+          <div class="control-row">
+            <div style="flex: 1; min-width: 280px">
+              <div class="kpi-label" style="margin-bottom: 5px">Layer Block (0 → 11)</div>
+              <div id="layer-scrubber" class="layer-scrubber"></div>
+            </div>
+            <div style="flex: 1; min-width: 280px">
+              <div class="kpi-label" style="margin-bottom: 5px">Attention Head (0 → 11)</div>
+              <div id="head-scrubber" class="head-scrubber"></div>
+            </div>
+          </div>
+
+          <div class="split-grid-wide-left">
+            <div class="sub-panel">
+              <h4>
+                <span id="attn-panel-title">Layer 0 · Head 0 Attention Weights</span>
+                <span id="attn-entropy-badge" class="mono" style="font-size: 0.74rem; color: var(--accent-cyan)"></span>
+              </h4>
+              <svg id="bipartite-svg" class="bipartite-svg" viewBox="0 0 640 280"></svg>
+              <div style="font-size: 0.76rem; color: var(--text-muted); margin: 4px 0 8px">
+                Upper triangle is strictly 0.0 (causal mask prevents future token leakage). Rows sum to 1.00.
+              </div>
+              <div id="attn-matrix-wrap" class="matrix-scroll"></div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 14px">
+              <div class="sub-panel">
+                <h4>
+                  <span>Logit Lens at Layer <span id="lens-layer-num">0</span></span>
+                  <span class="mono" style="font-size: 0.72rem; color: var(--accent-pink)">
+                    ln_f(hₗ) · Wᵤᵀ
+                  </span>
+                </h4>
+                <div id="logit-lens-bars" class="logit-bar-list"></div>
+              </div>
+
+              <div class="sub-panel">
+                <h4>
+                  <span>Top Activated MLP GELU Neurons (Last Token)</span>
+                  <span id="block-delta-badge" class="mono" style="font-size: 0.72rem; color: var(--text-secondary)"></span>
+                </h4>
+                <div id="mlp-neuron-bars" class="logit-bar-list"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- STAGE 4: FINAL LM HEAD LOGITS & SAMPLING -->
+        <section id="stage-4" class="glass-card">
+          <div class="card-header">
+            <div class="card-title-wrap">
+              <span class="stage-kicker">
+                Stage 4 · Decoding \(P(x_{t+1}) = \text{softmax}(\text{logits} / T)\)
+              </span>
+              <h3 class="card-title">LM Head Logits, Nucleus Filtering &amp; Probability Tape</h3>
+              <p class="card-desc">
+                Adjust decoding hyperparameters interactively on the real 50,257-vocabulary logits and
+                roll the weighted probability tape to sample the next token.
+              </p>
+            </div>
+            <a
+              class="companion-btn"
+              href="https://martianunlimited.github.io/llm_sampling/"
+              target="_blank"
+              rel="noopener"
+              >Deep Dive: LLM Sampling ↗</a
+            >
+          </div>
+
+          <div class="control-row">
+            <button class="pill-selector" data-decode-preset="greedy" type="button">Greedy (T=0)</button>
+            <button class="pill-selector active" data-decode-preset="balanced" type="button">
+              Balanced (T=0.8, K=40, p=0.9)
+            </button>
+            <button class="pill-selector" data-decode-preset="creative" type="button">
+              Creative (T=1.35, p=0.95)
+            </button>
+            <button id="btn-roll-sampler" class="btn-primary" type="button">Roll Sampler Dice</button>
+          </div>
+
+          <div class="control-row">
+            <div class="control-group">
+              <label for="slider-temp">Temperature <span id="val-temp">0.80</span></label>
+              <input id="slider-temp" type="range" min="0" max="2" step="0.05" value="0.8" />
+            </div>
+            <div class="control-group">
+              <label for="slider-topk">Top-K (0=off) <span id="val-topk">24</span></label>
+              <input id="slider-topk" type="range" min="0" max="24" step="1" value="24" />
+            </div>
+            <div class="control-group">
+              <label for="slider-topp">Top-P Nucleus <span id="val-topp">0.90</span></label>
+              <input id="slider-topp" type="range" min="0.1" max="1.0" step="0.05" value="0.9" />
+            </div>
+            <div class="control-group">
+              <label for="slider-reppen">Rep. Penalty <span id="val-reppen">1.10</span></label>
+              <input id="slider-reppen" type="range" min="1.0" max="2.0" step="0.05" value="1.1" />
+            </div>
+          </div>
+
+          <div class="kpi-strip">
+            <div class="kpi-box">
+              <div class="kpi-label">Full-Vocab Entropy</div>
+              <div id="kpi-vocab-entropy" class="kpi-val">—</div>
+            </div>
+            <div class="kpi-box">
+              <div class="kpi-label">Post-Filter Entropy</div>
+              <div id="kpi-filtered-entropy" class="kpi-val">—</div>
+            </div>
+            <div class="kpi-box">
+              <div class="kpi-label">Surviving Candidates</div>
+              <div id="kpi-surviving" class="kpi-val">—</div>
+            </div>
+            <div class="kpi-box">
+              <div class="kpi-label">Sampled Roll Result</div>
+              <div id="kpi-sampled-token" class="kpi-val" style="color: var(--accent-emerald)">—</div>
+            </div>
+          </div>
+
+          <div style="font-size: 0.8rem; color: var(--text-secondary)">
+            Continuous Sampling Tape <span class="mono">[0.00 → 1.00]</span> — Click <strong>Roll Sampler Dice</strong> to drop uniform draw <code class="mono">u ~ U(0,1)</code>:
+          </div>
+          <div id="explainer-sampling-tape" class="sampling-tape"></div>
+
+          <div id="explainer-logits-bars" class="logit-bar-list" style="margin-top: 14px"></div>
+        </section>
+      </section>
+
+      <!-- TAB 2: LIVE BROWSER LLM (REAL WEBGPU / WASM ONNX WEIGHTS) -->
+      <section id="panel-live" class="tab-panel" role="tabpanel">
+        <div class="glass-card">
+          <div class="card-header">
+            <div class="card-title-wrap">
+              <span class="stage-kicker">Client-Side Neural Execution · @huggingface/transformers v3</span>
+              <h2 class="card-title">Live Browser LLM Studio (Real Quantized Weights)</h2>
+              <p class="card-desc">
+                Download and execute authentic causal language models directly in your browser using
+                WebGPU (with automatic WASM fallback). Enter any custom prompt, inspect real BPE IDs
+                and real 50k-vocab logits, then step or stream tokens live.
+              </p>
+            </div>
+            <span id="live-device-badge" class="badge-real">Idle · Not Loaded</span>
+          </div>
+
+          <div class="callout-banner">
+            <strong>Full Transparency:</strong> Quantized ONNX decoder models (~81 MB – 122 MB, cached
+            by your browser after first download) compute genuine next-token logits locally. Unlike the
+            pre-extracted PyTorch trace in Tab 1, standard ONNX exports do not expose internal
+            attention matrices — this tab focuses on real custom-prompt tokenization, live logits,
+            interactive decoding, and generation latency.
+          </div>
+
+          <div class="control-row" style="align-items: flex-end; margin-top: 14px">
+            <div class="control-group" style="flex: 2; min-width: 260px">
+              <label for="live-model-select">Browser ONNX Model</label>
+              <select id="live-model-select" class="select-input">
+                <option value="Xenova/distilgpt2">
+                  Xenova/distilgpt2 (~81 MB q8 · 6L GPT-2, Fastest Load)
+                </option>
+                <option value="Xenova/gpt2">
+                  Xenova/gpt2 (~122 MB q8 · 12L GPT-2, Matches Tab 1 Weights)
+                </option>
+                <option value="HuggingFaceTB/SmolLM2-135M-Instruct">
+                  HuggingFaceTB/SmolLM2-135M-Instruct (~112 MB q4f16 · Modern Llama RoPE+GQA)
+                </option>
+              </select>
+            </div>
+            <button id="btn-load-model" class="btn-primary" type="button">
+              Load Model into Browser
+            </button>
+          </div>
+
+          <div id="live-progress-wrap" style="display: none; margin-bottom: 12px">
+            <div
+              id="live-progress-text"
+              class="mono"
+              style="font-size: 0.78rem; color: var(--text-secondary)"
+            >
+              Initializing...
+            </div>
+            <div class="progress-shell">
+              <div id="live-progress-bar" class="progress-fill"></div>
+            </div>
+          </div>
+
+          <div style="margin-top: 12px">
+            <label
+              for="live-prompt-input"
+              class="kpi-label"
+              style="display: block; margin-bottom: 6px"
+              >Custom Prompt</label
+            >
+            <textarea id="live-prompt-input" class="prompt-textarea" rows="3">The capital of France is</textarea>
+          </div>
+
+          <div class="control-row" style="margin-top: 10px">
+            <button class="pill-selector" data-live-preset="The capital of France is" type="button">
+              Capital of France
+            </button>
+            <button
+              class="pill-selector"
+              data-live-preset="Harry Potter opened the heavy oak door. Harry"
+              type="button"
+            >
+              Harry Potter Induction
+            </button>
+            <button
+              class="pill-selector"
+              data-live-preset="function binarySearch(arr, target) {"
+              type="button"
+            >
+              JS Binary Search
+            </button>
+            <button
+              class="pill-selector"
+              data-live-preset="The trophy wouldn't fit in the suitcase because it was too"
+              type="button"
+            >
+              Winograd Prompt
+            </button>
+          </div>
+
+          <div class="control-row" style="margin-top: 8px">
+            <button id="btn-live-inspect" class="btn-primary" type="button" disabled>
+              Inspect Real Next-Token Logits
+            </button>
+            <button id="btn-live-step" class="btn-secondary" type="button" disabled>
+              Sample &amp; Append +1 Token
+            </button>
+            <button id="btn-live-generate" class="btn-secondary" type="button" disabled>
+              Auto-Generate (+16 Tokens)
+            </button>
+            <button id="btn-live-stop" class="btn-secondary" type="button" disabled>Stop</button>
+          </div>
+        </div>
+
+        <div class="glass-card">
+          <div class="kpi-strip">
+            <div class="kpi-box">
+              <div class="kpi-label">Execution Backend</div>
+              <div id="live-kpi-backend" class="kpi-val">—</div>
+            </div>
+            <div class="kpi-box">
+              <div class="kpi-label">Forward Pass Latency</div>
+              <div id="live-kpi-latency" class="kpi-val">—</div>
+            </div>
+            <div class="kpi-box">
+              <div class="kpi-label">Context Length</div>
+              <div id="live-kpi-tokens" class="kpi-val">—</div>
+            </div>
+            <div class="kpi-box">
+              <div class="kpi-label">Vocab Entropy</div>
+              <div id="live-kpi-entropy" class="kpi-val">—</div>
+            </div>
+          </div>
+
+          <div class="split-grid">
+            <div class="sub-panel">
+              <h4>
+                <span>Live BPE Tokenization Stream</span>
+                <span id="live-tok-count" class="mono" style="font-size: 0.74rem; color: var(--accent-cyan)"></span>
+              </h4>
+              <div id="live-token-ribbon" class="token-ribbon"></div>
+            </div>
+
+            <div class="sub-panel">
+              <h4>
+                <span>Real Next-Token Logits (Interactive Decoding)</span>
+                <span id="live-sampled-badge" class="mono" style="font-size: 0.74rem; color: var(--accent-emerald)"></span>
+              </h4>
+              <div class="control-row" style="margin-bottom: 10px">
+                <div class="control-group" style="min-width: 120px">
+                  <label for="live-temp">Temp <span id="live-val-temp">0.80</span></label>
+                  <input id="live-temp" type="range" min="0" max="2" step="0.05" value="0.8" />
+                </div>
+                <div class="control-group" style="min-width: 120px">
+                  <label for="live-topk">Top-K <span id="live-val-topk">20</span></label>
+                  <input id="live-topk" type="range" min="0" max="20" step="1" value="20" />
+                </div>
+                <div class="control-group" style="min-width: 120px">
+                  <label for="live-topp">Top-P <span id="live-val-topp">0.90</span></label>
+                  <input id="live-topp" type="range" min="0.1" max="1.0" step="0.05" value="0.9" />
+                </div>
+              </div>
+              <div id="live-logits-bars" class="logit-bar-list"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="footer-bar">
+        <div>
+          Part of the <strong>LLM Internals Interactive Suite</strong> — built for static GitHub Pages
+          with real PyTorch GPT-2 traces and Transformers.js v3 WebGPU/WASM execution.
+        </div>
+        <div>
+          Explore individual labs:
+          <a href="https://martianunlimited.github.io/llm_tokenizer/" target="_blank" rel="noopener">Tokenizer</a> ·
+          <a href="https://martianunlimited.github.io/llm_embedding/" target="_blank" rel="noopener">Embedding</a> ·
+          <a href="https://martianunlimited.github.io/llm_attention/" target="_blank" rel="noopener">Attention</a> ·
+          <a href="https://martianunlimited.github.io/llm_sampling/" target="_blank" rel="noopener">Sampling</a>
+        </div>
+      </footer>
+    </main>
+
+    <!-- Embedded trace bundle allows file:// offline viewing before async JSON load -->
+    <script src="js/embeddedTraces.js"></script>
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>
